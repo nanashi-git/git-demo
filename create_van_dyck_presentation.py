@@ -1,72 +1,79 @@
 #!/usr/bin/env python3
 """
-Создание презентации: Антонис Ван Дейк — избранные картины
+Презентация: Антонис Ван Дейк — избранные картины
 Предмет: История искусств
+Современный дизайн с картинками
 """
 
 from pptx import Presentation
-from pptx.util import Inches, Pt
+from pptx.util import Inches, Pt, Emu
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE
-from pptx.enum.text import PP_ALIGN
+from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from datetime import datetime
 import os
 
-# Тема: Искусство / Гуманитарные — тёплая палитра
-COLORS = {
-    "bg_primary": RGBColor(0x1A, 0x0A, 0x2E),
-    "bg_secondary": RGBColor(0x2D, 0x13, 0x4A),
-    "accent": RGBColor(0xC9, 0x9A, 0x2E),        # Золотой
-    "accent_light": RGBColor(0xE8, 0xC5, 0x6D),   # Светло-золотой
-    "text_primary": RGBColor(0xFF, 0xFF, 0xFF),
-    "text_secondary": RGBColor(0xE8, 0xE0, 0xD0),
-    "text_muted": RGBColor(0x9A, 0x8A, 0x7A),
-    "gradient_start": RGBColor(0x0F, 0x07, 0x1A),
-    "gradient_end": RGBColor(0x2D, 0x1B, 0x4E),
-    "card_bg": RGBColor(0x22, 0x10, 0x3A),
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+IMAGES_DIR = os.path.join(SCRIPT_DIR, "images")
+
+# Палитра: тёмная с золотыми акцентами (стиль барокко)
+C = {
+    "bg": RGBColor(0x12, 0x0B, 0x1E),
+    "bg2": RGBColor(0x1C, 0x12, 0x30),
+    "card": RGBColor(0x1E, 0x14, 0x35),
+    "accent": RGBColor(0xC9, 0x9A, 0x2E),
+    "accent_lt": RGBColor(0xE8, 0xC5, 0x6D),
+    "white": RGBColor(0xFF, 0xFF, 0xFF),
+    "light": RGBColor(0xE8, 0xE0, 0xD0),
+    "muted": RGBColor(0x8A, 0x7A, 0x6A),
+    "grad1": RGBColor(0x08, 0x05, 0x12),
+    "grad2": RGBColor(0x22, 0x15, 0x3A),
 }
 
-FONTS = {
-    "heading": "Georgia",
-    "body": "Palatino Linotype",
-    "fallback": "Times New Roman",
-}
+F_HEAD = "Georgia"
+F_BODY = "Calibri"
 
 
-def add_gradient_bg(slide, c1, c2):
+def gradient_bg(slide, c1, c2):
     fill = slide.background.fill
     fill.gradient()
     fill.gradient_stops[0].color.rgb = c1
     fill.gradient_stops[1].color.rgb = c2
 
 
-def add_solid_bg(slide, color):
+def solid_bg(slide, color):
     fill = slide.background.fill
     fill.solid()
     fill.fore_color.rgb = color
 
 
-def add_shape(slide, shape_type, left, top, width, height, color):
-    shape = slide.shapes.add_shape(shape_type, left, top, width, height)
-    shape.fill.solid()
-    shape.fill.fore_color.rgb = color
-    shape.line.fill.background()
-    return shape
+def rect(slide, l, t, w, h, color):
+    s = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, l, t, w, h)
+    s.fill.solid()
+    s.fill.fore_color.rgb = color
+    s.line.fill.background()
+    return s
 
 
-def add_text(slide, left, top, width, height, text, font_name=None, size=Pt(16),
-             color=None, bold=False, italic=False, align=PP_ALIGN.LEFT):
-    if font_name is None:
-        font_name = FONTS["body"]
+def oval(slide, l, t, w, h, color):
+    s = slide.shapes.add_shape(MSO_SHAPE.OVAL, l, t, w, h)
+    s.fill.solid()
+    s.fill.fore_color.rgb = color
+    s.line.fill.background()
+    return s
+
+
+def text(slide, l, t, w, h, txt, font=F_BODY, sz=Pt(14), color=None,
+         bold=False, italic=False, align=PP_ALIGN.LEFT):
     if color is None:
-        color = COLORS["text_secondary"]
-    txBox = slide.shapes.add_textbox(left, top, width, height)
-    tf = txBox.text_frame
+        color = C["light"]
+    tb = slide.shapes.add_textbox(l, t, w, h)
+    tf = tb.text_frame
     tf.word_wrap = True
     p = tf.paragraphs[0]
-    p.text = text
-    p.font.name = font_name
-    p.font.size = size
+    p.text = txt
+    p.font.name = font
+    p.font.size = sz
     p.font.bold = bold
     p.font.italic = italic
     p.font.color.rgb = color
@@ -74,32 +81,77 @@ def add_text(slide, left, top, width, height, text, font_name=None, size=Pt(16),
     return tf
 
 
-def add_multiline_text(slide, left, top, width, height, lines, font_name=None,
-                       size=Pt(14), color=None, spacing=Pt(8)):
-    """Добавляет многострочный текст с буллетами"""
-    if font_name is None:
-        font_name = FONTS["body"]
+def multitext(slide, l, t, w, h, lines, font=F_BODY, sz=Pt(13), color=None, spacing=Pt(6)):
     if color is None:
-        color = COLORS["text_secondary"]
-    txBox = slide.shapes.add_textbox(left, top, width, height)
-    tf = txBox.text_frame
+        color = C["light"]
+    tb = slide.shapes.add_textbox(l, t, w, h)
+    tf = tb.text_frame
     tf.word_wrap = True
     for i, line in enumerate(lines):
-        if i == 0:
-            p = tf.paragraphs[0]
-        else:
-            p = tf.add_paragraph()
+        p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
         p.text = line
-        p.font.name = font_name
-        p.font.size = size
+        p.font.name = font
+        p.font.size = sz
         p.font.color.rgb = color
         p.space_before = spacing
     return tf
 
 
-def create_slide_number(slide, num):
-    add_text(slide, Inches(9.2), Inches(7.0), Inches(0.6), Inches(0.4),
-             str(num), size=Pt(9), color=COLORS["text_muted"], align=PP_ALIGN.RIGHT)
+def add_image(slide, img_name, left, top, width=None, height=None):
+    """Add image to slide. Specify width OR height to maintain aspect ratio."""
+    path = os.path.join(IMAGES_DIR, img_name)
+    if not os.path.exists(path):
+        print(f"  WARNING: Image not found: {path}")
+        return None
+    if width and not height:
+        return slide.shapes.add_picture(path, left, top, width=width)
+    elif height and not width:
+        return slide.shapes.add_picture(path, left, top, height=height)
+    elif width and height:
+        return slide.shapes.add_picture(path, left, top, width=width, height=height)
+    else:
+        return slide.shapes.add_picture(path, left, top)
+
+
+def slide_num(slide, n):
+    text(slide, Inches(9.3), Inches(7.05), Inches(0.5), Inches(0.3),
+         str(n), sz=Pt(9), color=C["muted"], align=PP_ALIGN.RIGHT)
+
+
+def painting_slide(prs, num, title, year, img_file, facts, extra=""):
+    """Создаёт слайд с картиной: изображение слева, текст справа"""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    solid_bg(slide, C["bg"])
+
+    # Тонкая золотая линия сверху
+    rect(slide, Inches(0), Inches(0), Inches(10), Pt(3), C["accent"])
+
+    # Картина слева (в рамке)
+    # Фон-подложка для картины
+    rect(slide, Inches(0.3), Inches(0.6), Inches(4.2), Inches(6.5), C["card"])
+
+    # Картина
+    pic = add_image(slide, img_file, Inches(0.5), Inches(0.8), height=Inches(6.1))
+
+    # Заголовок справа
+    text(slide, Inches(4.8), Inches(0.7), Inches(4.9), Inches(0.9),
+         title, font=F_HEAD, sz=Pt(20), color=C["white"], bold=True)
+
+    # Год
+    text(slide, Inches(4.8), Inches(1.5), Inches(4.9), Inches(0.4),
+         year, sz=Pt(13), color=C["accent_lt"], italic=True)
+
+    # Акцентная линия
+    rect(slide, Inches(4.8), Inches(1.95), Inches(1.5), Pt(2), C["accent"])
+
+    # Факты о картине
+    multitext(slide, Inches(4.8), Inches(2.2), Inches(4.9), Inches(4.8),
+              facts, sz=Pt(12), spacing=Pt(10))
+
+    # Номер слайда
+    slide_num(slide, num)
+
+    return slide
 
 
 def main():
@@ -107,300 +159,299 @@ def main():
     prs.slide_width = Inches(10)
     prs.slide_height = Inches(7.5)
 
-    # ==========================================
+    # ============================
     # СЛАЙД 1: ТИТУЛЬНЫЙ
-    # ==========================================
+    # ============================
     slide = prs.slides.add_slide(prs.slide_layouts[6])
-    add_gradient_bg(slide, COLORS["gradient_start"], COLORS["gradient_end"])
+    gradient_bg(slide, C["grad1"], C["grad2"])
 
-    # Декор
-    add_shape(slide, MSO_SHAPE.OVAL, Inches(8.0), Inches(-1.5), Inches(4), Inches(4), COLORS["accent"])
-    add_shape(slide, MSO_SHAPE.OVAL, Inches(-1.2), Inches(5.5), Inches(2.5), Inches(2.5), COLORS["accent_light"])
+    # Декоративные элементы
+    oval(slide, Inches(7.8), Inches(-1.5), Inches(4), Inches(4), C["accent"])
+    oval(slide, Inches(-1.2), Inches(5.5), Inches(2.5), Inches(2.5), C["accent_lt"])
 
-    # Линия-акцент
-    add_shape(slide, MSO_SHAPE.RECTANGLE, Inches(1.2), Inches(2.4), Inches(3), Pt(4), COLORS["accent"])
+    # Картина как фоновый элемент (автопортрет, полупрозрачно через позиционирование)
+    pic = add_image(slide, "self_portrait.jpg", Inches(6.5), Inches(1.5), height=Inches(5.5))
+    if pic:
+        # Добавим overlay поверх
+        overlay = rect(slide, Inches(6.5), Inches(1.5), Inches(3.5), Inches(5.5), C["grad2"])
+        # Сделаем полупрозрачным через XML
+        from pptx.oxml.ns import qn
+        spPr = overlay._element.spPr
+        solidFill = spPr.find(qn('a:solidFill'))
+        if solidFill is not None:
+            srgbClr = solidFill.find(qn('a:srgbClr'))
+            if srgbClr is not None:
+                alpha = srgbClr.makeelement(qn('a:alpha'), {})
+                alpha.set('val', '55000')  # 55% opacity
+                srgbClr.append(alpha)
 
     # Вуз
-    add_text(slide, Inches(1.2), Inches(0.4), Inches(8), Inches(0.5),
-             "Тверской филиал РГУ им. А.Н. Косыгина", size=Pt(10), color=COLORS["text_muted"])
+    text(slide, Inches(0.8), Inches(0.5), Inches(6), Inches(0.4),
+         "Тверской филиал РГУ им. А.Н. Косыгина", sz=Pt(10), color=C["muted"])
 
-    # Дисциплина
-    add_text(slide, Inches(1.2), Inches(1.8), Inches(7), Inches(0.5),
-             "История искусств", size=Pt(14), color=COLORS["accent_light"], italic=True)
+    # Предмет
+    text(slide, Inches(0.8), Inches(2.0), Inches(5), Inches(0.4),
+         "ИСТОРИЯ ИСКУССТВ", sz=Pt(12), color=C["accent_lt"], italic=True)
+
+    # Золотая линия
+    rect(slide, Inches(0.8), Inches(2.6), Inches(3.5), Pt(4), C["accent"])
 
     # Заголовок
-    add_text(slide, Inches(1.2), Inches(2.7), Inches(7.5), Inches(1.8),
-             "АНТОНИС ВАН ДЕЙК", font_name=FONTS["heading"],
-             size=Pt(38), color=COLORS["text_primary"], bold=True)
+    text(slide, Inches(0.8), Inches(2.9), Inches(5.5), Inches(1.8),
+         "АНТОНИС\nВАН ДЕЙК", font=F_HEAD, sz=Pt(42), color=C["white"], bold=True)
 
     # Подзаголовок
-    add_text(slide, Inches(1.2), Inches(4.3), Inches(7.5), Inches(0.8),
-             "Избранные произведения великого фламандского портретиста",
-             size=Pt(16), color=COLORS["text_secondary"])
+    text(slide, Inches(0.8), Inches(4.8), Inches(5), Inches(0.6),
+         "Избранные произведения", sz=Pt(16), color=C["light"])
+
+    # Даты жизни
+    text(slide, Inches(0.8), Inches(5.5), Inches(5), Inches(0.4),
+         "1599 – 1641", sz=Pt(14), color=C["accent_lt"])
 
     # Автор
-    add_text(slide, Inches(1.2), Inches(6.3), Inches(7.5), Inches(0.5),
-             f"Студент 1 курса  •  {datetime.now().year}",
-             size=Pt(11), color=COLORS["text_muted"])
+    text(slide, Inches(0.8), Inches(6.5), Inches(5), Inches(0.4),
+         f"Студент 1 курса  •  {datetime.now().year}", sz=Pt(10), color=C["muted"])
 
-    # ==========================================
-    # СЛАЙД 2: О ХУДОЖНИКЕ
-    # ==========================================
+    # ============================
+    # СЛАЙД 2: БИОГРАФИЯ
+    # ============================
     slide = prs.slides.add_slide(prs.slide_layouts[6])
-    add_solid_bg(slide, COLORS["bg_primary"])
+    solid_bg(slide, C["bg"])
 
-    add_text(slide, Inches(0.8), Inches(0.3), Inches(8.4), Inches(0.9),
-             "Антонис Ван Дейк (1599–1641)", font_name=FONTS["heading"],
-             size=Pt(26), color=COLORS["text_primary"], bold=True)
-    add_shape(slide, MSO_SHAPE.RECTANGLE, Inches(0.8), Inches(1.1), Inches(2), Pt(3), COLORS["accent"])
+    rect(slide, Inches(0), Inches(0), Inches(10), Pt(3), C["accent"])
 
-    lines = [
-        "• Фламандский живописец эпохи барокко, ученик Питера Пауля Рубенса",
-        "• Родился 22 марта 1599 г. в Антверпене, умер 9 декабря 1641 г. в Лондоне",
-        "• Придворный художник английского короля Карла I с 1632 года",
-        "• Крупнейший мастер парадного аристократического портрета XVII века",
-        "• Работал в Антверпене, Генуе, Риме, Палермо и Лондоне",
-        "• Оказал огромное влияние на английскую портретную живопись на 150 лет вперёд",
-        "• Создал более 900 картин за свою короткую жизнь (42 года)",
+    # Автопортрет слева
+    rect(slide, Inches(0.3), Inches(0.8), Inches(3.2), Inches(6.2), C["card"])
+    add_image(slide, "self_portrait.jpg", Inches(0.45), Inches(0.95), height=Inches(5.9))
+
+    # Текст справа
+    text(slide, Inches(3.8), Inches(0.5), Inches(5.8), Inches(0.8),
+         "Антонис Ван Дейк", font=F_HEAD, sz=Pt(26), color=C["white"], bold=True)
+
+    text(slide, Inches(3.8), Inches(1.2), Inches(5.8), Inches(0.4),
+         "22 марта 1599, Антверпен — 9 декабря 1641, Лондон",
+         sz=Pt(11), color=C["accent_lt"], italic=True)
+
+    rect(slide, Inches(3.8), Inches(1.7), Inches(1.5), Pt(2), C["accent"])
+
+    bio_lines = [
+        "Фламандский живописец, один из величайших",
+        "портретистов эпохи барокко",
+        "",
+        "• Ученик и помощник Питера Пауля Рубенса",
+        "• Итальянский период (1621–1627): Генуя, Рим",
+        "• Придворный художник Карла I с 1632 года",
+        "• Создал более 900 картин за 42 года жизни",
+        "• Революционизировал жанр парадного портрета",
+        "• Определил развитие английской портретной",
+        "  живописи на 150 лет вперёд",
     ]
-    add_multiline_text(slide, Inches(0.8), Inches(1.5), Inches(8.4), Inches(5.5),
-                       lines, size=Pt(15), spacing=Pt(14))
-    create_slide_number(slide, 2)
+    multitext(slide, Inches(3.8), Inches(1.9), Inches(5.8), Inches(5.2),
+              bio_lines, sz=Pt(13), spacing=Pt(8))
 
-    # ==========================================
-    # СЛАЙД 3: Семейный портрет
-    # ==========================================
-    slide = prs.slides.add_slide(prs.slide_layouts[6])
-    add_solid_bg(slide, COLORS["bg_primary"])
+    slide_num(slide, 2)
 
-    add_text(slide, Inches(0.8), Inches(0.3), Inches(8.4), Inches(0.9),
-             "Семейный портрет (ок. 1620–1621)", font_name=FONTS["heading"],
-             size=Pt(24), color=COLORS["text_primary"], bold=True)
-    add_shape(slide, MSO_SHAPE.RECTANGLE, Inches(0.8), Inches(1.05), Inches(2), Pt(3), COLORS["accent"])
+    # ============================
+    # СЛАЙДЫ 3–10: КАРТИНЫ
+    # ============================
 
-    lines = [
-        "• Холст, масло. 113,5 × 93,5 см",
-        "• Хранится в Государственном Эрмитаже, Санкт-Петербург",
-        "• Изображена супружеская пара с дочерью на коленях у матери",
-        "• Компактная композиция создаёт атмосферу доверительной",
-        "  близости и согласия между членами семьи",
-        "• Написана в ранний период творчества — Ван Дейку было ~21 год",
-        "• Демонстрирует влияние Рубенса в колористике и свободе мазка",
-        "• Одна из самых проникновенных работ молодого мастера",
-    ]
-    add_multiline_text(slide, Inches(0.8), Inches(1.4), Inches(8.4), Inches(5.5),
-                       lines, size=Pt(14), spacing=Pt(12))
-    create_slide_number(slide, 3)
+    painting_slide(prs, 3,
+        "Семейный портрет",
+        "Ок. 1620–1621 • Холст, масло • 113,5 × 93,5 см",
+        "family_portrait.jpg",
+        [
+            "Государственный Эрмитаж, Санкт-Петербург",
+            "",
+            "Одна из самых проникновенных работ раннего",
+            "периода. Изображена супружеская пара с",
+            "дочерью на коленях у матери.",
+            "",
+            "Компактная композиция создаёт атмосферу",
+            "доверительной близости и семейного согласия.",
+            "",
+            "Ван Дейку было всего 21 год — но уже видно",
+            "влияние Рубенса в колористике и свободной,",
+            "уверенной манере письма.",
+        ])
 
-    # ==========================================
-    # СЛАЙД 4: Св. Мартин и нищий
-    # ==========================================
-    slide = prs.slides.add_slide(prs.slide_layouts[6])
-    add_solid_bg(slide, COLORS["bg_primary"])
+    painting_slide(prs, 4,
+        "Святой Мартин и нищий",
+        "Ок. 1618 • Дерево, масло • 172 × 158 см",
+        "st_martin.jpg",
+        [
+            "Церковь Св. Мартина, Завентем (Бельгия)",
+            "",
+            "Алтарный образ, написанный 19-летним Ван",
+            "Дейком. Сюжет: римский воин Мартин Турский",
+            "разрезает свой плащ, чтобы поделиться",
+            "с замерзающим нищим.",
+            "",
+            "Заказ предназначался Рубенсу, но был",
+            "передан талантливому ученику.",
+            "",
+            "Мощная барочная диагональ и драматизм",
+            "свидетельствуют о раннем мастерстве.",
+        ])
 
-    add_text(slide, Inches(0.8), Inches(0.3), Inches(8.4), Inches(0.9),
-             "Святой Мартин и нищий (ок. 1618)", font_name=FONTS["heading"],
-             size=Pt(24), color=COLORS["text_primary"], bold=True)
-    add_shape(slide, MSO_SHAPE.RECTANGLE, Inches(0.8), Inches(1.05), Inches(2), Pt(3), COLORS["accent"])
+    painting_slide(prs, 5,
+        "Портрет кардинала Бентивольо",
+        "Ок. 1623 • Холст, масло",
+        "bentivoglio.jpg",
+        [
+            "Галерея Палатина, Палаццо Питти, Флоренция",
+            "",
+            "Написан в итальянский период. Кардинал Гвидо",
+            "Бентивольо — дипломат, связанный с Фландрией.",
+            "",
+            "«Весь Рим устремился смотреть это чудо",
+            "искусства, и каждый хотел быть написанным",
+            "рукой нашего художника»",
+            "",
+            "Работа, вдохновлённая Тицианом, утвердила",
+            "Ван Дейка как ведущего портретиста эпохи.",
+            "Передаёт ум и чувственность натуры.",
+        ])
 
-    lines = [
-        "• Дерево, масло. 172 × 158 см",
-        "• Алтарный образ церкви Св. Мартина в Завентеме (Бельгия)",
-        "• Сюжет: римский воин Мартин Турский разрезает свой плащ,",
-        "  чтобы поделиться с замерзающим нищим холодным зимним утром",
-        "• Работа написана, когда Ван Дейку было всего ~19 лет",
-        "• Заказ изначально предназначался для Рубенса, но был",
-        "  передан его талантливому ученику",
-        "• Драматичная барочная композиция с сильной диагональю",
-        "• Свидетельство раннего мастерства в монументальной живописи",
-    ]
-    add_multiline_text(slide, Inches(0.8), Inches(1.4), Inches(8.4), Inches(5.5),
-                       lines, size=Pt(14), spacing=Pt(12))
-    create_slide_number(slide, 4)
+    painting_slide(prs, 6,
+        "Автопортрет",
+        "Ок. 1620–1621 • Холст, масло • 119,7 × 87,9 см",
+        "self_portrait.jpg",
+        [
+            "Метрополитен-музей, Нью-Йорк",
+            "",
+            "Написан зимой 1620–1621 в Лондоне.",
+            "Ван Дейк изображает себя как светского",
+            "джентльмена в изысканной одежде — без",
+            "палитры и кистей.",
+            "",
+            "Небрежная поза руки у подбородка",
+            "подчёркивает аристократизм. Отец был",
+            "богатым торговцем тканями.",
+            "",
+            "Виртуозная кисть передаёт блеск шёлка",
+            "и сияние молодой кожи 21-летнего мастера.",
+        ])
 
-    # ==========================================
-    # СЛАЙД 5: Портрет кардинала Бентивольо
-    # ==========================================
-    slide = prs.slides.add_slide(prs.slide_layouts[6])
-    add_solid_bg(slide, COLORS["bg_primary"])
+    painting_slide(prs, 7,
+        "Портрет Марии Луизы де Тассис",
+        "Ок. 1629–1630 • Холст, масло",
+        "maria_de_tassis.jpg",
+        [
+            "Коллекция князей Лихтенштейн, Вадуц",
+            "",
+            "Мария Луиза (1611–1638) — дочь Антонио де",
+            "Тассис из Антверпена. Семья де Тассис",
+            "создала первую почтовую систему Европы",
+            "(ныне Thurn und Taxis).",
+            "",
+            "Изображена в возрасте около 19 лет.",
+            "Роскошное платье, кружева, жемчуг —",
+            "утончённая красота молодой аристократки.",
+            "",
+            "Эталон мастерства в передаче тканей,",
+            "украшений и женственности.",
+        ])
 
-    add_text(slide, Inches(0.8), Inches(0.3), Inches(8.4), Inches(0.9),
-             "Портрет кардинала Гвидо Бентивольо (ок. 1623)", font_name=FONTS["heading"],
-             size=Pt(24), color=COLORS["text_primary"], bold=True)
-    add_shape(slide, MSO_SHAPE.RECTANGLE, Inches(0.8), Inches(1.05), Inches(2), Pt(3), COLORS["accent"])
+    painting_slide(prs, 8,
+        "Портрет сэра Томаса Чалонера",
+        "Конец 1630-х • Холст, масло",
+        "chaloner.jpg",
+        [
+            "Государственный Эрмитаж, Санкт-Петербург",
+            "",
+            "Одна из последних работ мастера. Сэр Томас",
+            "Чалонер — английский придворный при Карле I.",
+            "",
+            "Художник с поразительной честностью передаёт",
+            "стареющее лицо: дряблая кожа, румянец —",
+            "без лести, глубокий психологизм.",
+            "",
+            "Считается одним из лучших полотен позднего",
+            "периода. Свободная, уверенная манера",
+            "письма зрелого мастера.",
+        ])
 
-    lines = [
-        "• Холст, масло. Галерея Палатина, Палаццо Питти, Флоренция",
-        "• Написан во время пребывания Ван Дейка в Италии (1621–1627)",
-        "• Кардинал Бентивольо имел связи с родной Фландрией художника",
-        "• «Весь Рим устремился смотреть это чудо искусства, и каждый",
-        "  хотел быть написанным рукой нашего художника» (XVIII в.)",
-        "• Работа вдохновлена итальянскими мастерами, особенно Тицианом",
-        "• Утвердила Ван Дейка как ведущего портретиста своего времени",
-        "• Передаёт жизнь, ум и чувственность натуры кардинала",
-    ]
-    add_multiline_text(slide, Inches(0.8), Inches(1.4), Inches(8.4), Inches(5.5),
-                       lines, size=Pt(14), spacing=Pt(12))
-    create_slide_number(slide, 5)
+    painting_slide(prs, 9,
+        "Портрет Карла I на охоте",
+        "Ок. 1635 • Холст, масло • 266 × 207 см",
+        "charles_hunt.jpg",
+        [
+            "Музей Лувр, Париж",
+            "",
+            "Шедевр и жемчужина Лувра с 1793 года.",
+            "Карл I в гражданской одежде, стоящий у лошади.",
+            "",
+            "«Тонкий компромисс между джентльменской",
+            "небрежностью и королевской уверенностью»",
+            "— описание Лувра.",
+            "",
+            "Король был невысок (163 см), но Ван Дейк",
+            "с помощью композиции создаёт впечатление",
+            "величественной фигуры. Лошадь словно",
+            "кланяется, подчёркивая статус монарха.",
+        ])
 
-    # ==========================================
-    # СЛАЙД 6: Автопортрет 1620
-    # ==========================================
-    slide = prs.slides.add_slide(prs.slide_layouts[6])
-    add_solid_bg(slide, COLORS["bg_primary"])
+    painting_slide(prs, 10,
+        "Портрет Дигби и Рассела",
+        "Ок. 1637 • Холст, масло",
+        "digby_russell.jpg",
+        [
+            "Коллекция Спенсеров, Олторп, Англия",
+            "",
+            "Двойной парадный портрет молодых",
+            "английских аристократов:",
+            "",
+            "Джордж Дигби (1612–1677) — 2-й граф",
+            "Бристоль, политик, поэт, драматург.",
+            "",
+            "Уильям Рассел (1616–1700) — будущий",
+            "1-й герцог Бедфорд.",
+            "",
+            "Элегантная непринуждённость поз —",
+            "типичный «friendship portrait», жанр,",
+            "в котором Ван Дейк непревзойдён.",
+        ])
 
-    add_text(slide, Inches(0.8), Inches(0.3), Inches(8.4), Inches(0.9),
-             "Автопортрет (ок. 1620–1621)", font_name=FONTS["heading"],
-             size=Pt(24), color=COLORS["text_primary"], bold=True)
-    add_shape(slide, MSO_SHAPE.RECTANGLE, Inches(0.8), Inches(1.05), Inches(2), Pt(3), COLORS["accent"])
-
-    lines = [
-        "• Холст, масло. 119,7 × 87,9 см",
-        "• Хранится в Метрополитен-музее, Нью-Йорк",
-        "• Написан предположительно зимой 1620–1621 гг. в Лондоне",
-        "• Ван Дейк изобразил себя как светского джентльмена в изысканной",
-        "  одежде, без палитры и кистей — атрибутов ремесла",
-        "• Небрежная поза руки у подбородка подчёркивает аристократизм",
-        "• Отец художника был богатым торговцем тканями — отсюда роскошь",
-        "  костюма и самоуверенность 21-летнего мастера",
-        "• Виртуозная кисть передаёт блеск ткани и сияние молодой кожи",
-    ]
-    add_multiline_text(slide, Inches(0.8), Inches(1.4), Inches(8.4), Inches(5.5),
-                       lines, size=Pt(14), spacing=Pt(12))
-    create_slide_number(slide, 6)
-
-    # ==========================================
-    # СЛАЙД 7: Портрет Марии Луизы де Тассис
-    # ==========================================
-    slide = prs.slides.add_slide(prs.slide_layouts[6])
-    add_solid_bg(slide, COLORS["bg_primary"])
-
-    add_text(slide, Inches(0.8), Inches(0.3), Inches(8.4), Inches(0.9),
-             "Портрет Марии Луизы де Тассис (ок. 1629–1630)", font_name=FONTS["heading"],
-             size=Pt(24), color=COLORS["text_primary"], bold=True)
-    add_shape(slide, MSO_SHAPE.RECTANGLE, Inches(0.8), Inches(1.05), Inches(2), Pt(3), COLORS["accent"])
-
-    lines = [
-        "• Холст, масло. Коллекция князей Лихтенштейн, Вадуц",
-        "• Мария Луиза (1611–1638) — дочь Антонио де Тассис из Антверпена",
-        "• Семья де Тассис из Бергамо создала первую почтовую систему Европы",
-        "  в конце XV века (ныне известна как Thurn und Taxis)",
-        "• Изображена в возрасте около 19 лет",
-        "• Изысканный барочный женский портрет: богатое платье, кружева,",
-        "  жемчуг и утончённые черты молодой аристократки",
-        "• Яркий пример мастерства Ван Дейка в передаче тканей и украшений",
-    ]
-    add_multiline_text(slide, Inches(0.8), Inches(1.4), Inches(8.4), Inches(5.5),
-                       lines, size=Pt(14), spacing=Pt(12))
-    create_slide_number(slide, 7)
-
-    # ==========================================
-    # СЛАЙД 8: Портрет сэра Томаса Чалонера
-    # ==========================================
-    slide = prs.slides.add_slide(prs.slide_layouts[6])
-    add_solid_bg(slide, COLORS["bg_primary"])
-
-    add_text(slide, Inches(0.8), Inches(0.3), Inches(8.4), Inches(0.9),
-             "Портрет сэра Томаса Чалонера (конец 1630-х)", font_name=FONTS["heading"],
-             size=Pt(24), color=COLORS["text_primary"], bold=True)
-    add_shape(slide, MSO_SHAPE.RECTANGLE, Inches(0.8), Inches(1.05), Inches(2), Pt(3), COLORS["accent"])
-
-    lines = [
-        "• Холст, масло. Государственный Эрмитаж, Санкт-Петербург",
-        "• Одна из последних работ Ван Дейка",
-        "• Сэр Томас Чалонер — английский придворный при Карле I",
-        "• Художник с мастерством передаёт стареющее лицо с дряблой кожей",
-        "  и румянцем на щеках — честная, без лести, характеристика",
-        "• Считается одним из лучших полотен позднего периода",
-        "• Глубокий психологизм: зритель ощущает характер и жизненный",
-        "  опыт изображённого человека",
-        "• Свободная, уверенная манера письма зрелого мастера",
-    ]
-    add_multiline_text(slide, Inches(0.8), Inches(1.4), Inches(8.4), Inches(5.5),
-                       lines, size=Pt(14), spacing=Pt(12))
-    create_slide_number(slide, 8)
-
-    # ==========================================
-    # СЛАЙД 9: Карл I на охоте
-    # ==========================================
-    slide = prs.slides.add_slide(prs.slide_layouts[6])
-    add_solid_bg(slide, COLORS["bg_primary"])
-
-    add_text(slide, Inches(0.8), Inches(0.3), Inches(8.4), Inches(0.9),
-             "Портрет Карла I на охоте (ок. 1635)", font_name=FONTS["heading"],
-             size=Pt(24), color=COLORS["text_primary"], bold=True)
-    add_shape(slide, MSO_SHAPE.RECTANGLE, Inches(0.8), Inches(1.05), Inches(2), Pt(3), COLORS["accent"])
-
-    lines = [
-        "• Холст, масло. 266 × 207 см. Музей Лувр, Париж",
-        "• Шедевр Ван Дейка и жемчужина коллекции Лувра с 1793 года",
-        "• Карл I изображён в гражданской одежде, стоящим у лошади,",
-        "  как будто отдыхающим на охоте",
-        "• «Тонкий компромисс между джентльменской небрежностью",
-        "  и королевской уверенностью» (описание Лувра)",
-        "• Король невысокого роста (163 см), но Ван Дейк с помощью",
-        "  композиции создаёт впечатление величественной фигуры",
-        "• Лошадь словно кланяется, подчёркивая статус монарха",
-        "• Прекрасный пейзажный фон объединяет природу и власть",
-    ]
-    add_multiline_text(slide, Inches(0.8), Inches(1.4), Inches(8.4), Inches(5.5),
-                       lines, size=Pt(13), spacing=Pt(10))
-    create_slide_number(slide, 9)
-
-    # ==========================================
-    # СЛАЙД 10: Портрет Дигби и Рассела
-    # ==========================================
-    slide = prs.slides.add_slide(prs.slide_layouts[6])
-    add_solid_bg(slide, COLORS["bg_primary"])
-
-    add_text(slide, Inches(0.8), Inches(0.3), Inches(8.4), Inches(0.9),
-             "Портрет Джорджа Дигби и Уильяма Рассела (ок. 1637)", font_name=FONTS["heading"],
-             size=Pt(22), color=COLORS["text_primary"], bold=True)
-    add_shape(slide, MSO_SHAPE.RECTANGLE, Inches(0.8), Inches(1.05), Inches(2), Pt(3), COLORS["accent"])
-
-    lines = [
-        "• Холст, масло. Коллекция Спенсеров, Олторп, Англия",
-        "• Двойной парадный портрет двух молодых английских аристократов",
-        "• Джордж Дигби (1612–1677) — 2-й граф Бристоль, политик-роялист,",
-        "  государственный секретарь Карла I, поэт и драматург",
-        "• Уильям Рассел (1616–1700) — впоследствии 1-й герцог Бедфорд",
-        "• Оба — молодые придворные, им около 21–25 лет на портрете",
-        "• Элегантная непринуждённость поз передаёт светскость",
-        "  и уверенность представителей высшей аристократии",
-        "• Типичный пример «friendship portrait» — жанра, в котором",
-        "  Ван Дейк был непревзойдённым мастером",
-    ]
-    add_multiline_text(slide, Inches(0.8), Inches(1.4), Inches(8.4), Inches(5.5),
-                       lines, size=Pt(13), spacing=Pt(10))
-    create_slide_number(slide, 10)
-
-    # ==========================================
+    # ============================
     # СЛАЙД 11: ФИНАЛЬНЫЙ
-    # ==========================================
+    # ============================
     slide = prs.slides.add_slide(prs.slide_layouts[6])
-    add_gradient_bg(slide, COLORS["gradient_start"], COLORS["gradient_end"])
+    gradient_bg(slide, C["grad1"], C["grad2"])
 
-    add_shape(slide, MSO_SHAPE.OVAL, Inches(7.0), Inches(4.0), Inches(4), Inches(4), COLORS["accent"])
-    add_shape(slide, MSO_SHAPE.OVAL, Inches(-0.8), Inches(-0.8), Inches(2), Inches(2), COLORS["accent_light"])
+    # Декор
+    oval(slide, Inches(7.2), Inches(4.2), Inches(3.8), Inches(3.8), C["accent"])
+    oval(slide, Inches(-0.8), Inches(-0.8), Inches(2), Inches(2), C["accent_lt"])
 
-    add_text(slide, Inches(1.2), Inches(2.5), Inches(7), Inches(1.5),
-             "СПАСИБО ЗА ВНИМАНИЕ", font_name=FONTS["heading"],
-             size=Pt(34), color=COLORS["text_primary"], bold=True)
+    # Мини-галерея из картинок внизу
+    gallery_imgs = ["family_portrait.jpg", "st_martin.jpg", "bentivoglio.jpg",
+                    "charles_hunt.jpg", "maria_de_tassis.jpg"]
+    x_start = 0.3
+    for i, img in enumerate(gallery_imgs):
+        add_image(slide, img, Inches(x_start + i * 1.95), Inches(5.0), height=Inches(2.0))
 
-    add_text(slide, Inches(1.2), Inches(4.2), Inches(6), Inches(0.8),
-             "Готов ответить на вопросы", size=Pt(18), color=COLORS["accent_light"])
+    # Текст
+    text(slide, Inches(1.0), Inches(1.5), Inches(8), Inches(1.5),
+         "СПАСИБО ЗА ВНИМАНИЕ", font=F_HEAD, sz=Pt(36),
+         color=C["white"], bold=True, align=PP_ALIGN.LEFT)
 
-    add_text(slide, Inches(1.2), Inches(5.8), Inches(6), Inches(0.8),
-             "Тверской филиал РГУ им. А.Н. Косыгина  •  История искусств",
-             size=Pt(11), color=COLORS["text_muted"])
+    rect(slide, Inches(1.0), Inches(3.0), Inches(2.5), Pt(3), C["accent"])
 
-    # Сохранение
-    output = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                          "Van_Dyck_Presentation.pptx")
+    text(slide, Inches(1.0), Inches(3.3), Inches(6), Inches(0.6),
+         "Готов ответить на вопросы", sz=Pt(18), color=C["accent_lt"])
+
+    text(slide, Inches(1.0), Inches(4.2), Inches(6), Inches(0.5),
+         "Тверской филиал РГУ им. А.Н. Косыгина  •  История искусств",
+         sz=Pt(11), color=C["muted"])
+
+    # ============================
+    # СОХРАНЕНИЕ
+    # ============================
+    output = os.path.join(SCRIPT_DIR, "Van_Dyck_Presentation.pptx")
     prs.save(output)
-    print(f"Презентация создана: {output}")
-    print(f"  Слайдов: 11")
-    print(f"  Тема: Антонис Ван Дейк — избранные произведения")
+    print(f"\n  Презентация создана: {output}")
+    print(f"  Слайдов: 11 (титульный + биография + 8 картин + финальный)")
+    print(f"  Дизайн: тёмный с золотыми акцентами, изображения картин")
+    print(f"  Шрифты: Georgia + Calibri")
 
 
 if __name__ == "__main__":
