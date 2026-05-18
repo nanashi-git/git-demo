@@ -11,6 +11,7 @@ from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from datetime import datetime
+from PIL import Image as PILImage
 import os
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -97,20 +98,48 @@ def multitext(slide, l, t, w, h, lines, font=F_BODY, sz=Pt(13), color=None, spac
     return tf
 
 
-def add_image(slide, img_name, left, top, width=None, height=None):
-    """Add image to slide. Specify width OR height to maintain aspect ratio."""
+def get_image_size(img_name):
+    """Получает размеры изображения"""
+    path = os.path.join(IMAGES_DIR, img_name)
+    if not os.path.exists(path):
+        return (800, 1000)  # fallback
+    with PILImage.open(path) as img:
+        return img.size  # (width, height)
+
+
+def add_image_fit(slide, img_name, left, top, max_width, max_height):
+    """
+    Добавляет картину, вписывая в область max_width x max_height
+    с сохранением пропорций. Центрирует по горизонтали и вертикали.
+    """
     path = os.path.join(IMAGES_DIR, img_name)
     if not os.path.exists(path):
         print(f"  WARNING: Image not found: {path}")
         return None
-    if width and not height:
-        return slide.shapes.add_picture(path, left, top, width=width)
-    elif height and not width:
-        return slide.shapes.add_picture(path, left, top, height=height)
-    elif width and height:
-        return slide.shapes.add_picture(path, left, top, width=width, height=height)
+
+    img_w, img_h = get_image_size(img_name)
+    aspect = img_w / img_h
+
+    # Вычисляем размер, вписывая в область
+    max_w_inches = max_width / 914400  # Emu to inches
+    max_h_inches = max_height / 914400
+
+    if aspect > (max_w_inches / max_h_inches):
+        # Картина шире — ограничиваем по ширине
+        final_w = max_width
+        final_h = int(max_width / aspect)
     else:
-        return slide.shapes.add_picture(path, left, top)
+        # Картина выше — ограничиваем по высоте
+        final_h = max_height
+        final_w = int(max_height * aspect)
+
+    # Центрирование
+    offset_x = (max_width - final_w) // 2
+    offset_y = (max_height - final_h) // 2
+
+    pic = slide.shapes.add_picture(path, left + offset_x, top + offset_y,
+                                   width=final_w, height=final_h)
+    return pic
 
 
 def slide_num(slide, n):
@@ -118,7 +147,7 @@ def slide_num(slide, n):
          str(n), sz=Pt(9), color=C["muted"], align=PP_ALIGN.RIGHT)
 
 
-def painting_slide(prs, num, title, year, img_file, facts, extra=""):
+def painting_slide(prs, num, title, year, img_file, facts):
     """Создаёт слайд с картиной: изображение слева, текст справа"""
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     solid_bg(slide, C["bg"])
@@ -126,27 +155,39 @@ def painting_slide(prs, num, title, year, img_file, facts, extra=""):
     # Тонкая золотая линия сверху
     rect(slide, Inches(0), Inches(0), Inches(10), Pt(3), C["accent"])
 
-    # Картина слева (в рамке)
-    # Фон-подложка для картины
-    rect(slide, Inches(0.3), Inches(0.6), Inches(4.2), Inches(6.5), C["card"])
+    # Подложка для картины
+    card_left = Inches(0.3)
+    card_top = Inches(0.5)
+    card_w = Inches(4.0)
+    card_h = Inches(6.6)
+    rect(slide, card_left, card_top, card_w, card_h, C["card"])
 
-    # Картина
-    pic = add_image(slide, img_file, Inches(0.5), Inches(0.8), height=Inches(6.1))
+    # Картина — вписываем с отступами внутри подложки
+    img_padding = Inches(0.15)
+    add_image_fit(slide, img_file,
+                  left=card_left + img_padding,
+                  top=card_top + img_padding,
+                  max_width=Emu(card_w - img_padding * 2),
+                  max_height=Emu(card_h - img_padding * 2))
 
-    # Заголовок справа
-    text(slide, Inches(4.8), Inches(0.7), Inches(4.9), Inches(0.9),
+    # Текстовая часть справа (начинается после картины)
+    text_left = Inches(4.6)
+    text_width = Inches(5.1)
+
+    # Заголовок
+    text(slide, text_left, Inches(0.6), text_width, Inches(0.8),
          title, font=F_HEAD, sz=Pt(20), color=C["white"], bold=True)
 
-    # Год
-    text(slide, Inches(4.8), Inches(1.5), Inches(4.9), Inches(0.4),
-         year, sz=Pt(13), color=C["accent_lt"], italic=True)
+    # Год / техника
+    text(slide, text_left, Inches(1.35), text_width, Inches(0.4),
+         year, sz=Pt(12), color=C["accent_lt"], italic=True)
 
     # Акцентная линия
-    rect(slide, Inches(4.8), Inches(1.95), Inches(1.5), Pt(2), C["accent"])
+    rect(slide, text_left, Inches(1.8), Inches(1.5), Pt(2), C["accent"])
 
-    # Факты о картине
-    multitext(slide, Inches(4.8), Inches(2.2), Inches(4.9), Inches(4.8),
-              facts, sz=Pt(12), spacing=Pt(10))
+    # Описание
+    multitext(slide, text_left, Inches(2.0), text_width, Inches(5.0),
+              facts, sz=Pt(12), spacing=Pt(8))
 
     # Номер слайда
     slide_num(slide, num)
@@ -166,27 +207,16 @@ def main():
     gradient_bg(slide, C["grad1"], C["grad2"])
 
     # Декоративные элементы
-    oval(slide, Inches(7.8), Inches(-1.5), Inches(4), Inches(4), C["accent"])
-    oval(slide, Inches(-1.2), Inches(5.5), Inches(2.5), Inches(2.5), C["accent_lt"])
+    oval(slide, Inches(8.0), Inches(-1.5), Inches(3.5), Inches(3.5), C["accent"])
+    oval(slide, Inches(-1.0), Inches(6.0), Inches(2.0), Inches(2.0), C["accent_lt"])
 
-    # Картина как фоновый элемент (автопортрет, полупрозрачно через позиционирование)
-    pic = add_image(slide, "self_portrait.jpg", Inches(6.5), Inches(1.5), height=Inches(5.5))
-    if pic:
-        # Добавим overlay поверх
-        overlay = rect(slide, Inches(6.5), Inches(1.5), Inches(3.5), Inches(5.5), C["grad2"])
-        # Сделаем полупрозрачным через XML
-        from pptx.oxml.ns import qn
-        spPr = overlay._element.spPr
-        solidFill = spPr.find(qn('a:solidFill'))
-        if solidFill is not None:
-            srgbClr = solidFill.find(qn('a:srgbClr'))
-            if srgbClr is not None:
-                alpha = srgbClr.makeelement(qn('a:alpha'), {})
-                alpha.set('val', '55000')  # 55% opacity
-                srgbClr.append(alpha)
+    # Автопортрет справа (вписан в зону)
+    add_image_fit(slide, "self_portrait.jpg",
+                  left=Emu(Inches(6.8)), top=Emu(Inches(1.2)),
+                  max_width=Emu(Inches(2.8)), max_height=Emu(Inches(5.5)))
 
     # Вуз
-    text(slide, Inches(0.8), Inches(0.5), Inches(6), Inches(0.4),
+    text(slide, Inches(0.8), Inches(0.5), Inches(5.5), Inches(0.4),
          "Тверской филиал РГУ им. А.Н. Косыгина", sz=Pt(10), color=C["muted"])
 
     # Предмет
@@ -194,18 +224,18 @@ def main():
          "ИСТОРИЯ ИСКУССТВ", sz=Pt(12), color=C["accent_lt"], italic=True)
 
     # Золотая линия
-    rect(slide, Inches(0.8), Inches(2.6), Inches(3.5), Pt(4), C["accent"])
+    rect(slide, Inches(0.8), Inches(2.55), Inches(3.0), Pt(4), C["accent"])
 
     # Заголовок
-    text(slide, Inches(0.8), Inches(2.9), Inches(5.5), Inches(1.8),
+    text(slide, Inches(0.8), Inches(2.8), Inches(5.5), Inches(1.8),
          "АНТОНИС\nВАН ДЕЙК", font=F_HEAD, sz=Pt(42), color=C["white"], bold=True)
 
     # Подзаголовок
-    text(slide, Inches(0.8), Inches(4.8), Inches(5), Inches(0.6),
+    text(slide, Inches(0.8), Inches(4.6), Inches(5.5), Inches(0.6),
          "Избранные произведения", sz=Pt(16), color=C["light"])
 
     # Даты жизни
-    text(slide, Inches(0.8), Inches(5.5), Inches(5), Inches(0.4),
+    text(slide, Inches(0.8), Inches(5.3), Inches(5), Inches(0.4),
          "1599 – 1641", sz=Pt(14), color=C["accent_lt"])
 
     # Автор
@@ -220,19 +250,25 @@ def main():
 
     rect(slide, Inches(0), Inches(0), Inches(10), Pt(3), C["accent"])
 
-    # Автопортрет слева
-    rect(slide, Inches(0.3), Inches(0.8), Inches(3.2), Inches(6.2), C["card"])
-    add_image(slide, "self_portrait.jpg", Inches(0.45), Inches(0.95), height=Inches(5.9))
+    # Автопортрет слева — подложка
+    card_w = Inches(3.0)
+    card_h = Inches(6.4)
+    rect(slide, Inches(0.3), Inches(0.7), card_w, card_h, C["card"])
+
+    # Вписываем автопортрет
+    add_image_fit(slide, "self_portrait.jpg",
+                  left=Emu(Inches(0.4)), top=Emu(Inches(0.8)),
+                  max_width=Emu(Inches(2.8)), max_height=Emu(Inches(6.2)))
 
     # Текст справа
-    text(slide, Inches(3.8), Inches(0.5), Inches(5.8), Inches(0.8),
+    text(slide, Inches(3.6), Inches(0.5), Inches(6.0), Inches(0.7),
          "Антонис Ван Дейк", font=F_HEAD, sz=Pt(26), color=C["white"], bold=True)
 
-    text(slide, Inches(3.8), Inches(1.2), Inches(5.8), Inches(0.4),
+    text(slide, Inches(3.6), Inches(1.15), Inches(6.0), Inches(0.4),
          "22 марта 1599, Антверпен — 9 декабря 1641, Лондон",
          sz=Pt(11), color=C["accent_lt"], italic=True)
 
-    rect(slide, Inches(3.8), Inches(1.7), Inches(1.5), Pt(2), C["accent"])
+    rect(slide, Inches(3.6), Inches(1.6), Inches(1.5), Pt(2), C["accent"])
 
     bio_lines = [
         "Фламандский живописец, один из величайших",
@@ -246,8 +282,8 @@ def main():
         "• Определил развитие английской портретной",
         "  живописи на 150 лет вперёд",
     ]
-    multitext(slide, Inches(3.8), Inches(1.9), Inches(5.8), Inches(5.2),
-              bio_lines, sz=Pt(13), spacing=Pt(8))
+    multitext(slide, Inches(3.6), Inches(1.8), Inches(6.0), Inches(5.4),
+              bio_lines, sz=Pt(13), spacing=Pt(9))
 
     slide_num(slide, 2)
 
@@ -300,8 +336,9 @@ def main():
         [
             "Галерея Палатина, Палаццо Питти, Флоренция",
             "",
-            "Написан в итальянский период. Кардинал Гвидо",
-            "Бентивольо — дипломат, связанный с Фландрией.",
+            "Написан в итальянский период. Кардинал",
+            "Гвидо Бентивольо — дипломат, связанный",
+            "с Фландрией.",
             "",
             "«Весь Рим устремился смотреть это чудо",
             "искусства, и каждый хотел быть написанным",
@@ -309,7 +346,6 @@ def main():
             "",
             "Работа, вдохновлённая Тицианом, утвердила",
             "Ван Дейка как ведущего портретиста эпохи.",
-            "Передаёт ум и чувственность натуры.",
         ])
 
     painting_slide(prs, 6,
@@ -321,12 +357,10 @@ def main():
             "",
             "Написан зимой 1620–1621 в Лондоне.",
             "Ван Дейк изображает себя как светского",
-            "джентльмена в изысканной одежде — без",
-            "палитры и кистей.",
+            "джентльмена — без палитры и кистей.",
             "",
             "Небрежная поза руки у подбородка",
-            "подчёркивает аристократизм. Отец был",
-            "богатым торговцем тканями.",
+            "подчёркивает аристократизм.",
             "",
             "Виртуозная кисть передаёт блеск шёлка",
             "и сияние молодой кожи 21-летнего мастера.",
@@ -339,17 +373,16 @@ def main():
         [
             "Коллекция князей Лихтенштейн, Вадуц",
             "",
-            "Мария Луиза (1611–1638) — дочь Антонио де",
-            "Тассис из Антверпена. Семья де Тассис",
-            "создала первую почтовую систему Европы",
-            "(ныне Thurn und Taxis).",
+            "Мария Луиза (1611–1638) — дочь Антонио",
+            "де Тассис из Антверпена. Семья создала",
+            "первую почтовую систему Европы.",
             "",
             "Изображена в возрасте около 19 лет.",
             "Роскошное платье, кружева, жемчуг —",
-            "утончённая красота молодой аристократки.",
+            "утончённая красота аристократки.",
             "",
-            "Эталон мастерства в передаче тканей,",
-            "украшений и женственности.",
+            "Эталон мастерства Ван Дейка в передаче",
+            "тканей, украшений и женственности.",
         ])
 
     painting_slide(prs, 8,
@@ -359,16 +392,16 @@ def main():
         [
             "Государственный Эрмитаж, Санкт-Петербург",
             "",
-            "Одна из последних работ мастера. Сэр Томас",
-            "Чалонер — английский придворный при Карле I.",
+            "Одна из последних работ мастера.",
+            "Сэр Томас Чалонер — придворный Карла I.",
             "",
-            "Художник с поразительной честностью передаёт",
-            "стареющее лицо: дряблая кожа, румянец —",
-            "без лести, глубокий психологизм.",
+            "Художник честно передаёт стареющее лицо:",
+            "дряблая кожа, румянец — без лести,",
+            "глубокий психологизм.",
             "",
-            "Считается одним из лучших полотен позднего",
-            "периода. Свободная, уверенная манера",
-            "письма зрелого мастера.",
+            "Считается одним из лучших полотен",
+            "позднего периода. Свободная, уверенная",
+            "манера письма зрелого мастера.",
         ])
 
     painting_slide(prs, 9,
@@ -379,16 +412,14 @@ def main():
             "Музей Лувр, Париж",
             "",
             "Шедевр и жемчужина Лувра с 1793 года.",
-            "Карл I в гражданской одежде, стоящий у лошади.",
+            "Карл I в гражданской одежде у лошади.",
             "",
             "«Тонкий компромисс между джентльменской",
             "небрежностью и королевской уверенностью»",
-            "— описание Лувра.",
             "",
             "Король был невысок (163 см), но Ван Дейк",
             "с помощью композиции создаёт впечатление",
-            "величественной фигуры. Лошадь словно",
-            "кланяется, подчёркивая статус монарха.",
+            "величественной фигуры.",
         ])
 
     painting_slide(prs, 10,
@@ -401,15 +432,13 @@ def main():
             "Двойной парадный портрет молодых",
             "английских аристократов:",
             "",
-            "Джордж Дигби (1612–1677) — 2-й граф",
-            "Бристоль, политик, поэт, драматург.",
-            "",
-            "Уильям Рассел (1616–1700) — будущий",
-            "1-й герцог Бедфорд.",
+            "• Джордж Дигби (1612–1677) — 2-й граф",
+            "  Бристоль, политик, поэт, драматург",
+            "• Уильям Рассел (1616–1700) — будущий",
+            "  1-й герцог Бедфорд",
             "",
             "Элегантная непринуждённость поз —",
-            "типичный «friendship portrait», жанр,",
-            "в котором Ван Дейк непревзойдён.",
+            "типичный «friendship portrait».",
         ])
 
     # ============================
@@ -419,29 +448,39 @@ def main():
     gradient_bg(slide, C["grad1"], C["grad2"])
 
     # Декор
-    oval(slide, Inches(7.2), Inches(4.2), Inches(3.8), Inches(3.8), C["accent"])
-    oval(slide, Inches(-0.8), Inches(-0.8), Inches(2), Inches(2), C["accent_lt"])
+    oval(slide, Inches(7.5), Inches(4.5), Inches(3.5), Inches(3.5), C["accent"])
+    oval(slide, Inches(-0.5), Inches(-0.5), Inches(1.5), Inches(1.5), C["accent_lt"])
 
-    # Мини-галерея из картинок внизу
-    gallery_imgs = ["family_portrait.jpg", "st_martin.jpg", "bentivoglio.jpg",
-                    "charles_hunt.jpg", "maria_de_tassis.jpg"]
-    x_start = 0.3
-    for i, img in enumerate(gallery_imgs):
-        add_image(slide, img, Inches(x_start + i * 1.95), Inches(5.0), height=Inches(2.0))
-
-    # Текст
-    text(slide, Inches(1.0), Inches(1.5), Inches(8), Inches(1.5),
+    # Текст вверху
+    text(slide, Inches(1.0), Inches(1.5), Inches(8), Inches(1.2),
          "СПАСИБО ЗА ВНИМАНИЕ", font=F_HEAD, sz=Pt(36),
          color=C["white"], bold=True, align=PP_ALIGN.LEFT)
 
-    rect(slide, Inches(1.0), Inches(3.0), Inches(2.5), Pt(3), C["accent"])
+    rect(slide, Inches(1.0), Inches(2.8), Inches(2.5), Pt(3), C["accent"])
 
-    text(slide, Inches(1.0), Inches(3.3), Inches(6), Inches(0.6),
+    text(slide, Inches(1.0), Inches(3.1), Inches(6), Inches(0.5),
          "Готов ответить на вопросы", sz=Pt(18), color=C["accent_lt"])
 
-    text(slide, Inches(1.0), Inches(4.2), Inches(6), Inches(0.5),
+    text(slide, Inches(1.0), Inches(3.8), Inches(6), Inches(0.4),
          "Тверской филиал РГУ им. А.Н. Косыгина  •  История искусств",
          sz=Pt(11), color=C["muted"])
+
+    # Мини-галерея внизу — 4 картины с правильными пропорциями
+    gallery_imgs = ["family_portrait.jpg", "bentivoglio.jpg",
+                    "charles_hunt.jpg", "maria_de_tassis.jpg"]
+    gallery_h = Inches(2.5)
+    x_pos = Inches(0.5)
+    for img in gallery_imgs:
+        img_w, img_h = get_image_size(img)
+        aspect = img_w / img_h
+        pic_h = gallery_h
+        pic_w = int(Emu(gallery_h) * aspect)
+        path = os.path.join(IMAGES_DIR, img)
+        if os.path.exists(path):
+            slide.shapes.add_picture(path, x_pos, Inches(4.6), height=gallery_h)
+            # Сдвигаем x на ширину картины + отступ
+            actual_w = gallery_h * aspect / 914400  # в дюймах
+            x_pos += Inches(actual_w + 0.15)
 
     # ============================
     # СОХРАНЕНИЕ
